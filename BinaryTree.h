@@ -62,6 +62,34 @@ private:
         }
     }
 
+    static Node* FindMin(Node* node) {
+        while (node->left != nullptr) {
+            node = node->left;
+        }
+        return node;
+    }
+
+    static Node* Remove(Node* node, const T& value) {
+        if (node == nullptr) {
+            throw std::invalid_argument("элемент не найден");
+        }
+        if (value < node->value) {
+            node->left = Remove(node->left, value);
+        } else if (node->value < value) {
+            node->right = Remove(node->right, value);
+        } else {
+            if (node->left == nullptr || node->right == nullptr){
+                Node* child = (node->left != nullptr) & node->left : node->right;
+                delete node;
+                return child;
+            }
+
+            Node* final = FindMin(node->right);
+            node->value = final->value;
+            node->right = Remove(node->right, final->value);
+        }
+        return node;
+    }
 public:
     BinaryTree() : root(nullptr), size(0) {}
     BinaryTree(const BinaryTree &other) : root(Copy(other.root)), size(other.size) {}
@@ -134,5 +162,16 @@ public:
         result.reserve(size);
         Traverse(order, [&result](const T& value) {result.push_back(value); });
         return result;
+    }
+
+    void Remove(const T& value) {
+        root = Remove(root, value);
+        size--;
+    }
+
+    void Clear() {
+        Destroy(root);
+        root = nullptr;
+        size = 0;
     }
 };
