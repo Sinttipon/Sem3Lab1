@@ -12,8 +12,7 @@ private:
         Node *left;
         Node *right;
 
-        Node(const T &v) : value(v), left(nullptr);
-        right(nullptr) {}
+        Node(const T &v) : value(v), left(nullptr), right(nullptr) {}
     };
 
     Node *root;
@@ -47,7 +46,7 @@ public:
         {
             Destroy(root);
             root = Copy(other.root);
-            size = other.size
+            size = other.size;
         }
         return *this;
     }
@@ -72,7 +71,7 @@ public:
             }
             else
             {
-                trow std::invalid_argument("Элемент уже существует")
+                throw std::invalid_argument("Элемент уже существует");
             }
         }
         *current = new Node(value);
