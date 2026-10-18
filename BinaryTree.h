@@ -37,6 +37,31 @@ private:
         return result;
     }
 
+    static void CheckOrder(const std::string& order) {
+        if (order.size() != 3) {
+            throw std::invalid_argument("должно быть 3 символа");
+        }
+        int k=0, l=0, p=0;
+        for (char c : order) {
+            if (c == 'K') k++;
+            else if (c == 'L') l++;
+            else if (c == 'P') p++;
+            else throw std::invalid_argument("только KLP");
+        }
+        if (k!=1 || l!=1 || p!=1){
+            throw std::invalid_argument (" каждая буква 1 раз");
+        }
+    }
+
+    static void Traverse(const Node* node, const std:: string& order, const std::function<void(const T&)>& visit) {
+        if (node == nullptr) return;
+        for (char c : order) {
+            if (c == 'K') visit(node->value);
+            else if (c == 'L') Traverse(node->left, order, visit);
+            else Traverse(node->right, order, visit);
+        }
+    }
+
 public:
     BinaryTree() : root(nullptr), size(0) {}
     BinaryTree(const BinaryTree &other) : root(Copy(other.root)), size(other.size) {}
@@ -97,5 +122,17 @@ public:
             }
         }
         return false;
+    }
+
+    void Traverse(const std::string& order, const std::function<void(const T&)>& visit) const {
+        CheckOrder(order);
+        Traverse(root, order, visit);
+    }
+
+    std::vector<T> ToVector(const std::string& order = "LKP") const{
+        std::vector<T> result;
+        result.reserve(size);
+        Traverse(order, [&result](const T& value) {result.push_back(value); });
+        return result;
     }
 };
