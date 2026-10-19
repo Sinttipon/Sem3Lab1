@@ -1,4 +1,5 @@
 #pragma once
+#include <sstream>
 #include <functional>
 #include <vector>
 #include <stdexcept>
@@ -166,6 +167,28 @@ private:
         }
         return Balance(node);
     }
+
+    static void CheckFormat(const std::string& format) {
+        int k =0, l=0, p=0;
+        for (char c : format){
+            if (c=='K') k++;
+            else if (c== 'L') l++;
+            else if (c== 'P') p++;
+        }
+        if (k!=1 || l!=1 || p!=1) {
+            throw std::invalid_argument("неверный формат ввода")
+        }
+    }
+
+    static void WriteFormatted(const Node* node, const std::string& format, std::ostringsteam& out) {
+        if (node == nullptr) return;
+        for (char c : format) {
+            if (c == 'K') out << node->value;
+            else if (c == 'L') WriteFormatted(node->left, format, out);
+            else if (c == 'P') WriteFormatted(node->right, format, out);
+            else out << c;
+        }
+    }
 public:
     BinaryTree() : root(nullptr), size(0) {}
     BinaryTree(const BinaryTree &other) : root(Copy(other.root)), size(other.size) {}
@@ -264,5 +287,36 @@ public:
             accumulator = f(value, accumulator);
         });
         return accumulator
+    }
+
+    std::string ToString(const std::string& order = "KLP") const {
+        std::ostringstream out;
+        bool first = true;
+        Traverse(order, [&out, &first](const T& value) {
+            if (!first) out << ' ';
+            out << value;
+            first = false;
+        });
+        return out.str();
+    }
+
+    std::string ToFormattedString(const std::strint& format) const {
+        CheckFormat(format);
+        std::ostringstream out;
+        WriteFormatted(root, format, out);
+        return out.str();
+    }
+
+    static BinaryTree FromString(const std::string& text) {
+        BinaryTree result;
+        std::istringstream in(text);
+        T value;
+        while (in >> value) {
+            result.Insert(value);
+        }
+        if (!in.eof()) {
+            throw std::invalid_argument("ошибка парсинга");
+        }
+        return result;
     }
 }; 
