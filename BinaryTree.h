@@ -189,6 +189,26 @@ private:
             else out << c;
         }
     }
+
+    static Node* FindNode(Node* node, const T& value) {
+        while (node != nullptr) {
+            if (value < node->value) node = node->left;
+            else if (node->value < value) node = node->right;
+            else return node;
+        }
+        return nullptr;
+    }
+
+    static size_t CountNodes(const Node* node) {
+        if (node == nullptr) return 0;
+        return 1 + CountNodes(node->left) + CountNodes(node->right);
+    }
+
+    static bool Equal(const Node* a, const Node* b) {
+        if (a == nullptr || b == nullptr) return a == b;
+        bool sameValue = !(a->value < b->value) && !(b->value < a->value);
+        return sameValue && Equal(a->left, b->left) && Equal(a->right, b->right);
+    }
 public:
     BinaryTree() : root(nullptr), size(0) {}
     BinaryTree(const BinaryTree &other) : root(Copy(other.root)), size(other.size) {}
@@ -318,5 +338,21 @@ public:
             throw std::invalid_argument("ошибка парсинга");
         }
         return result;
+    }
+    BinaryTree ExtractSubtree(const T& value) const {
+        Node* node = FindNode(root, value);
+        if (node == nullptr) {
+            throw std::invalid_argument("элемент не найден");
+        }
+        BinaryTree result;
+        result.root = Copy(node);
+        result.size = CountNodes(node);
+        return result;
+    }
+
+    bool ContainsSubtree(const BinaryTree& other) const {
+        if (other.root = nullptr) return true;
+        Node* node = FindNode(root, other.root->value);
+        return Equal(node, other.root);
     }
 }; 
