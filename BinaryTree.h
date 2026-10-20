@@ -327,18 +327,24 @@ public:
         return out.str();
     }
 
-    static BinaryTree FromString(const std::string& text) {
+    static BinaryTree FromString(const std::string &text)
+    {
         BinaryTree result;
         std::istringstream in(text);
-        T value;
-        while (in >> value) {
+        in >> std::ws; 
+        while (!in.eof())
+        {
+            T value;
+            if (!(in >> value))
+            {
+                throw std::invalid_argument("FromString: cannot parse element");
+            }
             result.Insert(value);
-        }
-        if (!in.eof()) {
-            throw std::invalid_argument("ошибка парсинга");
+            in >> std::ws; 
         }
         return result;
     }
+
     BinaryTree ExtractSubtree(const T& value) const {
         Node* node = FindNode(root, value);
         if (node == nullptr) {
