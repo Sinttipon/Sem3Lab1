@@ -131,12 +131,12 @@ private:
         return Balance(node);
     }
 
-    static bool ISBalanced(const Node* node){
+    static bool IsBalanced(const Node* node){
         if (node == nullptr) return true;
         int h1 = Height(node->left);
         int h2 = Height(node->right);
         int exp = (h1 > h2 ? h1 : h2) + 1;
-        return node->height == expected && h1-h2 <=1 && h2-h1 <=1 && ISBalanced(node->left) && ISBalanced(node->right);
+        return node->height == exp && h1-h2 <=1 && h2-h1 <=1 && IsBalanced(node->left) && IsBalanced(node->right);
     }
 
     static Node* FindMin(Node* node) {
@@ -176,11 +176,11 @@ private:
             else if (c== 'P') p++;
         }
         if (k!=1 || l!=1 || p!=1) {
-            throw std::invalid_argument("неверный формат ввода")
+            throw std::invalid_argument("неверный формат ввода");
         }
     }
 
-    static void WriteFormatted(const Node* node, const std::string& format, std::ostringsteam& out) {
+    static void WriteFormatted(const Node* node, const std::string& format, std::ostringstream& out) {
         if (node == nullptr) return;
         for (char c : format) {
             if (c == 'K') out << node->value;
@@ -229,7 +229,7 @@ public:
     bool IsEmpty() const { return size == 0; }
 
     int GetHeight() const {return Height(root);}
-    bool ISBalanced() const {return ISBalanced(root);}
+    bool IsBalanced() const {return IsBalanced(root);}
 
     void Insert(const T& value){
         root = Insert(root, value);
@@ -283,7 +283,7 @@ public:
     BinaryTree Map(const std::function<T(const T&)>& f) const {
         BinaryTree result;
         Traverse("LKP", [&result, &f](const T& value){
-            T mapped = f(valued);
+            T mapped = f(value);
             if (!result.Contains(mapped)){
                 result.Insert(mapped);
             }
@@ -306,7 +306,7 @@ public:
         Traverse("LKP", [&accumulator, &f](const T& value) {
             accumulator = f(value, accumulator);
         });
-        return accumulator
+        return accumulator;
     }
 
     std::string ToString(const std::string& order = "KLP") const {
@@ -320,7 +320,7 @@ public:
         return out.str();
     }
 
-    std::string ToFormattedString(const std::strint& format) const {
+    std::string ToFormattedString(const std::string& format) const {
         CheckFormat(format);
         std::ostringstream out;
         WriteFormatted(root, format, out);
@@ -357,7 +357,7 @@ public:
     }
 
     bool ContainsSubtree(const BinaryTree& other) const {
-        if (other.root = nullptr) return true;
+        if (other.root == nullptr) return true;
         Node* node = FindNode(root, other.root->value);
         return Equal(node, other.root);
     }
