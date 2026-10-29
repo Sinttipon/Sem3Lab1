@@ -1,21 +1,25 @@
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <random>
+#include <sstream>
 #include <string>
 #ifdef _WIN32
 #include <windows.h>
 #endif
 #include "BinaryTree.h"
 #include "Set.h"
+#include "TreeFormatter.h"
 #include "Types.h"
+#include "exceptions.hpp"
 
 int ReadInt(const std::string& prompt) {
     while (true) {
         std::cout << prompt;
         int value;
         if (std::cin >> value) return value;
-        if (std::cin.eof()) std::exit(0);
+        if (std::cin.eof()) throw EndOfStreamException("ввод закончился");
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cout << "Нужно целое число.\n";
@@ -25,7 +29,7 @@ int ReadInt(const std::string& prompt) {
 std::string ReadWord(const std::string& prompt) {
     std::cout << prompt;
     std::string word;
-    if (!(std::cin >> word)) std::exit(0);
+    if (!(std::cin >> word)) throw EndOfStreamException("ввод закончился");
     return word;
 }
 
@@ -33,19 +37,30 @@ std::string ReadLine(const std::string& prompt) {
     std::cout << prompt;
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     std::string line;
-    std::getline(std::cin, line);
+    if (!std::getline(std::cin, line)) throw EndOfStreamException("ввод закончился");
     return line;
 }
 
 template <typename T>
 T ReadValue(const std::string& hint) {
     while (true) {
-        std::string word = ReadWord("Значение " + hint + ": ");
-        std::istringstream in(word);
+        std::istringstream in(ReadWord("Значение " + hint + ": "));
         T value;
         if (in >> value && (in >> std::ws).eof()) return value;
         std::cout << "Не удалось разобрать, попробуй ещё раз.\n";
     }
+}
+
+bool ParseOrder(const std::string& text, Order& order) {
+    const char* names[] = {"KLP", "KPL", "LKP", "LPK", "PLK", "PKL"};
+    const Order orders[] = {Order::KLP, Order::KPL, Order::LKP, Order::LPK, Order::PLK, Order::PKL};
+    for (int i = 0; i < 6; i++) {
+        if (text == names[i]) {
+            order = orders[i];
+            return true;
+        }
+    }
+    return false;
 }
 
 template <typename T>
@@ -64,9 +79,34 @@ struct TypeInfo {
 
 template <typename T>
 void PrintTree(const BinaryTree<T>& tree) {
-    std::cout << "Дерево (ЛКП): [" << tree.ToString("LKP") << "]\n"
+    std::cout << "Дерево (ЛКП): [" << tree.ToString(Order::LKP) << "]\n"
               << "Размер: " << tree.GetSize() << ", высота: " << tree.GetHeight()
               << ", AVL: " << (tree.IsBalanced() ? "да" : "НЕТ") << "\n";
+}
+
+template <typename T>
+void FillRandom(BinaryTree<T>& tree, const TypeInfo<T>& info, std::mt19937& rng) {
+    int n = ReadInt("Сколько элементов: ");
+    if (n < 0) {
+        std::cout << "Количество не может быть отрицательным\n";
+        return;
+    }
+    int added = 0;
+    for (int attempts = 0; added < n && attempts < n * 10; attempts++) {
+        if (tree.Insert(info.random(rng))) added++;
+    }
+    std::cout << "Добавлено: " << added << "\n";
+}
+
+template <typename T>
+bool ReadTree(const std::string& prompt, BinaryTree<T>& tree) {
+    try {
+        tree.LoadFromString(ReadLine(prompt));
+        return true;
+    } catch (const InvalidArgument& e) {
+        std::cout << "Ошибка: " << e.what() << "\n";
+        return false;
+    }
 }
 
 template <typename T>
@@ -85,58 +125,62 @@ void TreeMenu(const TypeInfo<T>& info) {
                      "11. reduce: " << info.reduceName << "\n"
                      "12. Извлечь поддерево                   13. Проверить вхождение поддерева\n"
                      " 0. Назад\n";
-        int choice = ReadInt("> ");
-        try {
-            if (choice == 0) {
+        switch (ReadInt("> ")) {
+            case 0:
                 return;
-            } else if (choice == 1) {
-                tree.Insert(ReadValue<T>(info.hint));
-            } else if (choice == 2) {
-                tree.Remove(ReadValue<T>(info.hint));
-            } else if (choice == 3) {
-                bool found = tree.Contains(ReadValue<T>(info.hint));
-                std::cout << (found ? "Найден" : "Не найден") << "\n";
-            } else if (choice == 4) {
-                int n = ReadInt("Сколько элементов: ");
-                if (n < 0) throw std::invalid_argument("N must be non-negative");
-                int added = 0;
-                for (int attempts = 0; added < n && attempts < n * 10; attempts++) {
-                    T value = info.random(rng);
-                    if (!tree.Contains(value)) {
-                        tree.Insert(value);
-                        added++;
-                    }
-                }
-                std::cout << "Добавлено: " << added << "\n";
-            } else if (choice == 5) {
+            case 1:
+                if (!tree.Insert(ReadValue<T>(info.hint))) std::cout << "Такой элемент уже есть\n";
+                break;
+            case 2:
+                if (!tree.Remove(ReadValue<T>(info.hint))) std::cout << "Элемент не найден\n";
+                break;
+            case 3:
+                std::cout << (tree.Contains(ReadValue<T>(info.hint)) ? "Найден" : "Не найден") << "\n";
+                break;
+            case 4:
+                FillRandom(tree, info, rng);
+                break;
+            case 5:
                 tree.Clear();
-            } else if (choice == 6) {
-                std::string order = ReadWord("Порядок (KLP, KPL, LKP, LPK, PLK, PKL): ");
-                std::cout << tree.ToString(order) << "\n";
-            } else if (choice == 7) {
-                std::string format = ReadWord("Формат, например {K}(L)[P]: ");
-                std::cout << tree.ToFormattedString(format) << "\n";
-            } else if (choice == 8) {
-                std::string line = ReadLine("Элементы через пробел (" + info.hint + "): ");
-                tree = BinaryTree<T>::FromString(line);
-            } else if (choice == 9) {
-                std::cout << "Результат: [" << tree.Map(info.map).ToString("LKP") << "]\n";
-            } else if (choice == 10) {
-                std::cout << "Результат: [" << tree.Where(info.where).ToString("LKP") << "]\n";
-            } else if (choice == 11) {
-                std::cout << "Результат: " << tree.Reduce(info.reduce, info.reduceStart) << "\n";
-            } else if (choice == 12) {
-                BinaryTree<T> sub = tree.ExtractSubtree(ReadValue<T>(info.hint));
-                std::cout << "Поддерево: " << sub.ToFormattedString("{K}(L)[P]") << "\n";
-            } else if (choice == 13) {
-                std::string line = ReadLine("Поддерево в порядке KLP: ");
-                BinaryTree<T> sub = BinaryTree<T>::FromString(line);
-                std::cout << (tree.ContainsSubtree(sub) ? "Входит" : "Не входит") << "\n";
-            } else {
-                std::cout << "Нет такого пункта.\n";
+                break;
+            case 6: {
+                Order order;
+                if (ParseOrder(ReadWord("Порядок (KLP, KPL, LKP, LPK, PLK, PKL): "), order)) {
+                    tree.Traverse(order, [](const T& value) { std::cout << value << ' '; });
+                    std::cout << "\n";
+                } else
+                    std::cout << "Неизвестный порядок обхода\n";
+                break;
             }
-        } catch (const std::invalid_argument& e) {
-            std::cout << "Ошибка: " << e.what() << "\n";
+            case 7:
+                std::cout << TreeFormatter<T>(ReadWord("Формат, например {K}(L)[P]: ")).Format(tree) << "\n";
+                break;
+            case 8:
+                ReadTree("Элементы через пробел " + info.hint + ": ", tree);
+                break;
+            case 9:
+                std::cout << "Результат: [" << tree.Map(info.map).ToString(Order::LKP) << "]\n";
+                break;
+            case 10:
+                std::cout << "Результат: [" << tree.Where(info.where).ToString(Order::LKP) << "]\n";
+                break;
+            case 11:
+                std::cout << "Результат: " << tree.Reduce(info.reduce, info.reduceStart) << "\n";
+                break;
+            case 12: {
+                BinaryTree<T> sub = tree.ExtractSubtree(ReadValue<T>(info.hint));
+                if (sub.IsEmpty()) std::cout << "Элемент не найден\n";
+                else std::cout << "Поддерево: " << TreeFormatter<T>("{K}(L)[P]").Format(sub) << "\n";
+                break;
+            }
+            case 13: {
+                BinaryTree<T> sub;
+                if (ReadTree("Поддерево в порядке KLP: ", sub))
+                    std::cout << (tree.ContainsSubtree(sub) ? "Входит" : "Не входит") << "\n";
+                break;
+            }
+            default:
+                std::cout << "Нет такого пункта.\n";
         }
     }
 }
@@ -153,32 +197,40 @@ void SetMenu() {
                   << " 4. A + B (объединение)    5. A * B (пересечение)    6. A - B (разность)\n"
                   << " 7. A <= B (подмножество)  8. A == B (равенство)\n"
                   << " 0. Назад\n";
-        int choice = ReadInt("> ");
-        if (choice == 0) {
-            return;
-        } else if (choice == 1) {
-            a.Add(ReadInt("Число: "));
-        } else if (choice == 2) {
-            b.Add(ReadInt("Число: "));
-        } else if (choice == 3) {
-            a = Set<int>();
-            b = Set<int>();
-            for (int i = 0; i < 8; i++) {
-                a.Add(rng() % 15);
-                b.Add(rng() % 15);
-            }
-        } else if (choice == 4) {
-            std::cout << "A + B = " << (a + b) << "\n";
-        } else if (choice == 5) {
-            std::cout << "A * B = " << (a * b) << "\n";
-        } else if (choice == 6) {
-            std::cout << "A - B = " << (a - b) << "\n";
-        } else if (choice == 7) {
-            std::cout << "A <= B: " << ((a <= b) ? "да" : "нет") << "\n";
-        } else if (choice == 8) {
-            std::cout << "A == B: " << ((a == b) ? "да" : "нет") << "\n";
-        } else {
-            std::cout << "Нет такого пункта.\n";
+        switch (ReadInt("> ")) {
+            case 0:
+                return;
+            case 1:
+                a.Add(ReadInt("Число: "));
+                break;
+            case 2:
+                b.Add(ReadInt("Число: "));
+                break;
+            case 3:
+                a = Set<int>();
+                b = Set<int>();
+                for (int i = 0; i < 8; i++) {
+                    a.Add(static_cast<int>(rng() % 15));
+                    b.Add(static_cast<int>(rng() % 15));
+                }
+                break;
+            case 4:
+                std::cout << "A + B = " << (a + b) << "\n";
+                break;
+            case 5:
+                std::cout << "A * B = " << (a * b) << "\n";
+                break;
+            case 6:
+                std::cout << "A - B = " << (a - b) << "\n";
+                break;
+            case 7:
+                std::cout << "A <= B: " << (a <= b ? "да" : "нет") << "\n";
+                break;
+            case 8:
+                std::cout << "A == B: " << (a == b ? "да" : "нет") << "\n";
+                break;
+            default:
+                std::cout << "Нет такого пункта.\n";
         }
     }
 }
@@ -213,7 +265,7 @@ TypeInfo<std::string> StringInfo() {
     return {"string", "(слово без пробелов)",
             [](std::mt19937& rng) {
                 std::string word;
-                int length = 3 + rng() % 4;
+                int length = 3 + static_cast<int>(rng() % 4);
                 for (int i = 0; i < length; i++) word += static_cast<char>('a' + rng() % 26);
                 return word;
             },
@@ -225,14 +277,15 @@ TypeInfo<std::string> StringInfo() {
 }
 
 TypeInfo<Student> StudentInfo() {
-    static const std::string lastNames[] = {"Ivanov", "Petrov", "Sidorov", "Smirnov", "Kuznetsov"};
-    static const std::string firstNames[] = {"Ivan", "Petr", "Anna", "Maria", "Oleg"};
     return {"Student", "(id;Фамилия;Имя;год, например 7;Ivanov;Ivan;2005)",
             [](std::mt19937& rng) {
+                const char* lastNames[] = {"Ivanov", "Petrov", "Sidorov", "Smirnov", "Kuznetsov"};
+                const char* firstNames[] = {"Ivan", "Petr", "Anna", "Maria", "Oleg"};
                 return Student(static_cast<int>(rng() % 10000), lastNames[rng() % 5],
                                firstNames[rng() % 5], 2000 + static_cast<int>(rng() % 8));
             },
-            "год рождения + 1", [](const Student& s) {
+            "год рождения + 1",
+            [](const Student& s) {
                 Student copy = s;
                 copy.birthYear++;
                 return copy;
@@ -243,25 +296,40 @@ TypeInfo<Student> StudentInfo() {
             Student(0, "-", "-", 0)};
 }
 
-int main() {
-#ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
-#endif
+void MainMenu() {
     while (true) {
         std::cout << "\n===== ЛР-1: AVL-дерево =====\n"
                      "1. int   2. double   3. complex   4. string   5. Student\n"
                      "6. Множества (Set<int>)\n"
                      "0. Выход\n";
-        int choice = ReadInt("> ");
-        if (choice == 0) break;
-        else if (choice == 1) TreeMenu(IntInfo());
-        else if (choice == 2) TreeMenu(DoubleInfo());
-        else if (choice == 3) TreeMenu(ComplexInfo());
-        else if (choice == 4) TreeMenu(StringInfo());
-        else if (choice == 5) TreeMenu(StudentInfo());
-        else if (choice == 6) SetMenu();
-        else std::cout << "Нет такого пункта.\n";
+        switch (ReadInt("> ")) {
+            case 0: return;
+            case 1: TreeMenu(IntInfo()); break;
+            case 2: TreeMenu(DoubleInfo()); break;
+            case 3: TreeMenu(ComplexInfo()); break;
+            case 4: TreeMenu(StringInfo()); break;
+            case 5: TreeMenu(StudentInfo()); break;
+            case 6: SetMenu(); break;
+            default: std::cout << "Нет такого пункта.\n";
+        }
+    }
+}
+
+int main() {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+    try {
+        MainMenu();
+    } catch (const EndOfStreamException&) {
+        std::cout << "\nВвод закончился, выход.\n";
+    } catch (const IException& e) {
+        std::cout << "\nОшибка: " << e.what() << "\n";
+        return 1;
+    } catch (const std::exception& e) {
+        std::cout << "\nОшибка: " << e.what() << "\n";
+        return 1;
     }
     return 0;
 }
