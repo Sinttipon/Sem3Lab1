@@ -4,29 +4,39 @@
 #include "BinaryTree.h"
 #include <string>
 
-template <typename T>
-class TreeFormatter {
+template <typename TKey, typename TValue>
+class TreeFormatter
+{
 private:
-    using Node = typename BinaryTree<T>::Node;
-
+    using Node = typename BinaryTree<TKey, TValue>::Node;
     std::string format;
 
-    void Write(const Node* node, std::ostream& out) const {
-        if (node == nullptr) return;
-        for (char c : format) {
-            if (c == 'K') out << node->value;
-            else if (c == 'L') Write(node->left, out);
-            else if (c == 'P') Write(node->right, out);
-            else out << c;
+    void Write(const Node *node, std::ostream &out) const
+    {
+        if (node == nullptr)
+            return;
+        for (char c : format)
+        {
+            if (c == 'K')
+                out << node->GetKey();
+            else if (c == 'V')
+                out << node->GetValue();
+            else if (c == 'L')
+                Write(node->GetLeft(), out);
+            else if (c == 'P')
+                Write(node->GetRight(), out);
+            else
+                out << c;
         }
     }
 
 public:
-    TreeFormatter(const std::string& f) : format(f) {}
+    TreeFormatter(const std::string &f) : format(f) {}
 
-    std::string Format(const BinaryTree<T>& tree) const {
+    std::string Format(const BinaryTree<TKey, TValue> &tree) const
+    {
         std::ostringstream out;
-        Write(tree.root, out);
+        Write(tree.Root, out);
         return out.str();
     }
 };

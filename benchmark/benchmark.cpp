@@ -1,71 +1,105 @@
-#include <algorithm>
 #include <chrono>
-#include <cstdlib>
-#include <fstream>
 #include <iostream>
-#include <numeric>
 #include <random>
 #include <vector>
 #include "BinaryTree.h"
 
-template <typename Action>
-double MeasureMs(Action action) {
-    auto start = std::chrono::steady_clock::now();
-    action();
-    auto end = std::chrono::steady_clock::now();
-    return std::chrono::duration<double, std::milli>(end - start).count();
-}
+using Clock = std::chrono::high_resolution_clock;
+using Ms = std::chrono::milliseconds;
 
-int main(int argc, char* argv[]) {
-    long maxN = argc > 1 ? std::strtol(argv[1], nullptr, 10) : 10000000;
-    if (maxN <= 0) {
-        std::cerr << "Usage: benchmark [max_n > 0]\n";
-        return 1;
-    }
-    const int sizes[] = {10000, 30000, 100000, 300000, 1000000, 3000000, 10000000};
-
-    std::ofstream csv("results.csv");
-    csv << "n,insert_random,insert_sorted,search,remove\n";
-    std::cout << "n\tinsert_random\tinsert_sorted\tsearch\tremove   (ms)\n";
+int main(int argc, char *argv[])
+{
+    int n = (argc > 1) ? std::atoi(argv[1]) : 100000;
+    int q = (argc > 2) ? std::atoi(argv[2]) : 10000;
 
     std::mt19937 rng(42);
-    for (int n : sizes) {
-        if (n > maxN) break;
+    std::uniform_int_distribution<int> dist(0, n * 10);
 
-        std::vector<int> values(n);
-        std::iota(values.begin(), values.end(), 0);
-        std::shuffle(values.begin(), values.end(), rng);
-        std::vector<int> queries = values;
-        std::shuffle(queries.begin(), queries.end(), rng);
+    std::vector<int> values(n);
+    for (int &v : values)
+        v = dist(rng);
 
-        BinaryTree<int> tree;
-        double insertRandom = MeasureMs([&] {
-            for (int v : values) tree.Insert(v);
-        });
+    std::vector<int> queries(q);
+    for (int &v : queries)
+        v = dist(rng);
+
+    // Случайная вставка, поиск, удаление
+    {
+        BinaryTree<int, int> tree;
+        auto t0 = Clock::now();
+        for (int v : values)
+        {
+            try
+            {
+                tree.Insert(v, v);
+            }
+            catch (...)
+            {
+            }
+        }
+        auto t1 = Clock::now();
+        std::cout << "Insert " << n << " random: "
+                  << std::chrono::duration_cast<Ms>(t1 - t0).count() << " ms\n";
 
         int found = 0;
-        double search = MeasureMs([&] {
-            for (int v : queries) found += tree.Contains(v);
-        });
+        t0 = Clock::now();
+        for (int v : queries)
+        {
+            if (tree.Search(v))
+                found++;
+        }
+        t1 = Clock::now();
+        std::cout << "Search " << q << " random: "
+                  << std::chrono::duration_cast<Ms>(t1 - t0).count() << " ms (found " << found << ")\n";
 
-        double remove = MeasureMs([&] {
-            for (int v : queries) tree.Remove(v);
-        });
+        t0 = Clock::now();
+        for (int v : queries)
+        {
+            try
+            {
+                tree.Remove(v);
+            }
+            catch (...)
+            {
+            }
+        }
+        t1 = Clock::now();
+        std::cout << "Remove " << q << " random: "
+                  << std::chrono::duration_cast<Ms>(t1 - t0).count() << " ms\n";
 
-        BinaryTree<int> sorted;
-        double insertSorted = MeasureMs([&] {
-            for (int i = 0; i < n; i++) sorted.Insert(i);
-        });
-
-        if (found != n || !tree.IsEmpty() || sorted.GetSize() != static_cast<std::size_t>(n)) {
-            std::cerr << "Error: wrong result at n = " << n << "\n";
+        if (found != 0 || !tree.IsEmpty())
+        {
+            std::cerr << "benchmark: unexpected state\n";
             return 1;
         }
-
-        csv << n << ',' << insertRandom << ',' << insertSorted << ',' << search << ',' << remove << '\n';
-        std::cout << n << '\t' << insertRandom << '\t' << insertSorted << '\t' << search << '\t' << remove
-                  << std::endl;
     }
-    std::cout << "Saved to results.csv\n";
+
+    // Отсортированная вставка (стресс-тест балансировки)
+    {
+        BinaryTree<int, int> sorted;
+        auto t0 = Clock::now();
+        for (int i = 0; i < n; i++)
+        {
+            try
+            {
+                sorted.Insert(i, i);
+            }
+            catch (...)
+            {
+            }
+        }
+        auto t1 = Clock::now();
+        std::cout << "Insert " << n << " sorted: "
+                  << std::chrono::duration_cast<Ms>(t1 - t0).count() << " ms\n";
+
+        if (sorted.GetSize() != static_cast<std::size_t>(n))
+        {
+            std::cerr << "benchmark: size mismatch\n";
+            return 1;
+        }
+        std::cout << "Height: " << sorted.GetHeight()
+                  << " (log2(n) ~ " << 3.32 * std::log10(n) << ")\n";
+    }
+
     return 0;
 }

@@ -1,82 +1,68 @@
 #pragma once
-#include <cstddef>
-#include <functional>
-#include <sstream>
-#include <utility>
+
 #include "Stack.h"
-#include <string>
 #include "exceptions.hpp"
+#include <functional>
+#include <utility>
 
-enum class Order { KLP, KPL, LKP, LPK, PLK, PKL };
-
-template <typename T>
+template <typename TKey, typename TValue>
 class TreeFormatter;
 
-template <typename T>
-class BinaryTree {
-private:
-    friend class TreeFormatter<T>;
+template <typename TKey, typename TValue>
+class BinaryTree
+{
+public:
+    class Node
+    {
+    private:
+        TKey key;
+        TValue value;
+        Node *left = nullptr;
+        Node *right = nullptr;
+        int height = 1;
 
-    struct Node {
-        T value;
-        Node* left;
-        Node* right;
-        int height;
+        friend class BinaryTree<TKey, TValue>;
+        template <typename K, typename V>
+        friend class TreeFormatter;
 
-        Node(const T& v) : value(v), left(nullptr), right(nullptr), height(1) {}
+    public:
+        Node() = default;
+        Node(TKey k, TValue v, Node *l = nullptr, Node *r = nullptr)
+            : key(k), value(v), left(l), right(r), height(1) {}
+        ~Node() = default;
+
+        const TValue &GetValue() const { return value; }
+        const TKey &GetKey() const { return key; }
+        Node *GetLeft() const { return left; }
+        Node *GetRight() const { return right; }
     };
 
-    using Action = std::function<void(const T&)>;
+    typedef std::function<void(const std::function<void(const TValue &)> &, Node *)> Traverser;
 
-    Node* root;
-    std::size_t size;
+private:
+    Node *Root = nullptr;
+    std::size_t size = 0;
 
-    bool Same(const T& a, const T& b) const { return !(a < b) && !(b < a); }
+    template <typename K, typename V>
+    friend class TreeFormatter;
 
-    Node* CreateNode(const T& value) {
-        Node* node = new Node(value);
-        size++;
-        return node;
-    }
+    int Height(Node *node) const { return node ? node->height : 0; }
 
-    void DeleteNode(Node* node) {
-        delete node;
-        size--;
-    }
-
-    void DeleteNodes(Node* node) {
-        if (node == nullptr) return;
-        DeleteNodes(node->left);
-        DeleteNodes(node->right);
-        DeleteNode(node);
-    }
-
-    Node* CopyNodes(const Node* node) {
-        if (node == nullptr) return nullptr;
-        Node* result = CreateNode(node->value);
-        try {
-            result->left = CopyNodes(node->left);
-            result->right = CopyNodes(node->right);
-        } catch (...) {
-            DeleteNodes(result);
-            throw;
+    void UpdateHeight(Node *node)
+    {
+        if (node)
+        {
+            int hl = Height(node->left);
+            int hr = Height(node->right);
+            node->height = (hl > hr ? hl : hr) + 1;
         }
-        result->height = node->height;
-        return result;
     }
 
-    int Height(const Node* node) const { return node == nullptr ? 0 : node->height; }
+    int BalanceFactor(Node *node) const { return node ? Height(node->left) - Height(node->right) : 0; }
 
-    void UpdateHeight(Node* node) {
-        int hl = Height(node->left);
-        int hr = Height(node->right);
-        node->height = (hl > hr ? hl : hr) + 1;
-    }
-
-    int BalanceFactor(const Node* node) const { return Height(node->left) - Height(node->right); }
-
-    Node* RotateRight(Node* y) {
-        Node* x = y->left;
+    Node *RotateRight(Node *y)
+    {
+        Node *x = y->left;
         y->left = x->right;
         x->right = y;
         UpdateHeight(y);
@@ -84,8 +70,9 @@ private:
         return x;
     }
 
-    Node* RotateLeft(Node* x) {
-        Node* y = x->right;
+    Node *RotateLeft(Node *x)
+    {
+        Node *y = x->right;
         x->right = y->left;
         y->left = x;
         UpdateHeight(x);
@@ -93,32 +80,70 @@ private:
         return y;
     }
 
-    Node* Balance(Node* node) {
+    Node *Balance(Node *node)
+    {
+        if (!node)
+            return node;
         UpdateHeight(node);
         int bf = BalanceFactor(node);
-        if (bf > 1) {
-            if (BalanceFactor(node->left) < 0) node->left = RotateLeft(node->left);
+        if (bf > 1)
+        {
+            if (BalanceFactor(node->left) < 0)
+                node->left = RotateLeft(node->left);
             return RotateRight(node);
         }
-        if (bf < -1) {
-            if (BalanceFactor(node->right) > 0) node->right = RotateRight(node->right);
+        if (bf < -1)
+        {
+            if (BalanceFactor(node->right) > 0)
+                node->right = RotateRight(node->right);
             return RotateLeft(node);
         }
         return node;
     }
 
-    Node* InsertNode(Node* node, const T& value, bool balance) {
-        if (node == nullptr) return CreateNode(value);
-        if (value < node->value) node->left = InsertNode(node->left, value, balance);
-        else if (node->value < value) node->right = InsertNode(node->right, value, balance);
-        else return node;
-        if (balance) return Balance(node);
-        UpdateHeight(node);
-        return node;
+    void DeleteNodes(Node *&TempNode)
+    {
+        if (TempNode == nullptr)
+            return;
+        DeleteNodes(TempNode->right);
+        DeleteNodes(TempNode->left);
+        delete TempNode;
+        TempNode = nullptr;
+        size--;
     }
 
-    Node* RemoveMin(Node* node, Node*& min) {
-        if (node->left == nullptr) {
+    Node *CopyNodes(Node *node)
+    {
+        if (!node)
+            return nullptr;
+        Node *newNode = new Node(node->key, node->value);
+        newNode->left = CopyNodes(node->left);
+        newNode->right = CopyNodes(node->right);
+        newNode->height = node->height;
+        size++;
+        return newNode;
+    }
+
+    Node *InsertNode(Node *node, const TKey &k, const TValue &Val)
+    {
+        if (!node)
+        {
+            size++;
+            return new Node(k, Val);
+        }
+        if (k < node->key)
+            node->left = InsertNode(node->left, k, Val);
+        else if (node->key < k)
+            node->right = InsertNode(node->right, k, Val);
+        else
+            throw InvalidArgument("Добавляемый элемент уже есть в дереве.");
+        return Balance(node);
+    }
+
+    Node *RemoveMin(Node *node, Node *&min)
+    {
+        if (!node->left)
+        {
             min = node;
             return node->right;
         }
@@ -126,281 +151,260 @@ private:
         return Balance(node);
     }
 
-    Node* RemoveNode(Node* node, const T& value) {
-        if (node == nullptr) return nullptr;
-        if (value < node->value) {
-            node->left = RemoveNode(node->left, value);
+    Node *RemoveNode(Node *node, const TKey &k)
+    {
+        if (!node)
+            return nullptr;
+        if (k < node->key)
+        {
+            node->left = RemoveNode(node->left, k);
             return Balance(node);
         }
-        if (node->value < value) {
-            node->right = RemoveNode(node->right, value);
+        if (node->key < k)
+        {
+            node->right = RemoveNode(node->right, k);
             return Balance(node);
         }
-        Node* left = node->left;
-        Node* right = node->right;
-        DeleteNode(node);
-        if (right == nullptr) return left;
-        Node* min = nullptr;
+
+        Node *left = node->left;
+        Node *right = node->right;
+        delete node;
+        size--;
+
+        if (!right)
+            return left;
+
+        Node *min = nullptr;
         right = RemoveMin(right, min);
         min->left = left;
         min->right = right;
         return Balance(min);
     }
 
-    const Node* FindNode(const T& value) const {
-        const Node* node = root;
-        while (node != nullptr) {
-            if (value < node->value) node = node->left;
-            else if (node->value < value) node = node->right;
-            else return node;
+    const Node *FindNode(const TKey &k) const
+    {
+        const Node *node = Root;
+        while (node != nullptr)
+        {
+            if (k < node->key)
+                node = node->left;
+            else if (node->key < k)
+                node = node->right;
+            else
+                return node;
         }
         return nullptr;
     }
 
-    bool CheckBalance(const Node* node) const {
-        if (node == nullptr) return true;
-        int hl = Height(node->left);
-        int hr = Height(node->right);
-        int bf = hl - hr;
-        return node->height == (hl > hr ? hl : hr) + 1 && bf >= -1 && bf <= 1
-            && CheckBalance(node->left) && CheckBalance(node->right);
-    }
-
-    bool EqualNodes(const Node* a, const Node* b) const {
-        if (a == nullptr || b == nullptr) return a == b;
-        return Same(a->value, b->value) && EqualNodes(a->left, b->left) && EqualNodes(a->right, b->right);
-    }
-
-    void KLP(const Node* node, const Action& action) const {
-        if (node == nullptr) return;
-        action(node->value);
-        KLP(node->left, action);
-        KLP(node->right, action);
-    }
-
-    void KPL(const Node* node, const Action& action) const {
-        if (node == nullptr) return;
-        action(node->value);
-        KPL(node->right, action);
-        KPL(node->left, action);
-    }
-
-    void LKP(const Node* node, const Action& action) const {
-        if (node == nullptr) return;
-        LKP(node->left, action);
-        action(node->value);
-        LKP(node->right, action);
-    }
-
-    void LPK(const Node* node, const Action& action) const {
-        if (node == nullptr) return;
-        LPK(node->left, action);
-        LPK(node->right, action);
-        action(node->value);
-    }
-
-    void PLK(const Node* node, const Action& action) const {
-        if (node == nullptr) return;
-        PLK(node->right, action);
-        PLK(node->left, action);
-        action(node->value);
-    }
-
-    void PKL(const Node* node, const Action& action) const {
-        if (node == nullptr) return;
-        PKL(node->right, action);
-        action(node->value);
-        PKL(node->left, action);
-    }
-
-    bool InsertValue(const T& value, bool balance) {
-        std::size_t before = size;
-        root = InsertNode(root, value, balance);
-        return size != before;
-    }
-
-    void Swap(BinaryTree& other) noexcept {
-        std::swap(root, other.root);
-        std::swap(size, other.size);
-    }
-
 public:
-    class Iterator {
+    class TreeEnumerator
+    {
     private:
-        friend class BinaryTree;
-
-        Stack<const Node*> path;
-        const Node* current = nullptr;
-
-        Iterator(const Node* root) {
-            PushLeft(root);
-            Advance();
-        }
-
-        void PushLeft(const Node* node) {
-            while (node != nullptr) {
-                path.Push(node);
-                node = node->left;
-            }
-        }
-
-        void Advance() {
-            if (path.IsEmpty()) {
-                current = nullptr;
-                return;
-            }
-            current = path.Top();
-            path.Pop();
-            PushLeft(current->right);
-        }
+        Node *current = nullptr;
+        Stack<Node *> path;
+        friend class BinaryTree<TKey, TValue>;
 
     public:
-        Iterator() = default;
+        TreeEnumerator() = default;
 
-        const T& operator*() const {
-            if (current == nullptr) throw EndOfStreamException("BinaryTree::Iterator: dereferencing end");
+        const TValue &operator*() const
+        {
+            if (!current)
+                throw EndOfStreamException("Попытка разыменования пустого итератора.");
             return current->value;
         }
 
-        const T* operator->() const { return &**this; }
+        const Node *operator->() const
+        {
+            if (!current)
+                throw EndOfStreamException("Попытка разыменования пустого итератора.");
+            return current;
+        }
 
-        Iterator& operator++() {
-            if (current != nullptr) Advance();
+        TreeEnumerator &operator++()
+        {
+            if (!current)
+                return *this;
+            if (current->right)
+            {
+                Node *temp = current->right;
+                while (temp)
+                {
+                    path.Push(temp);
+                    temp = temp->left;
+                }
+            }
+            if (!path.IsEmpty())
+            {
+                current = path.Top();
+                path.Pop();
+            }
+            else
+                current = nullptr;
             return *this;
         }
 
-        Iterator operator++(int) {
-            Iterator old = *this;
-            ++*this;
-            return old;
+        TreeEnumerator operator++(int)
+        {
+            TreeEnumerator temp = *this;
+            ++(*this);
+            return temp;
         }
 
-        bool operator==(const Iterator& other) const { return current == other.current; }
-        bool operator!=(const Iterator& other) const { return current != other.current; }
+        bool operator!=(const TreeEnumerator &other) const { return current != other.current; }
+        bool operator==(const TreeEnumerator &other) const { return current == other.current; }
     };
 
-    BinaryTree() : root(nullptr), size(0) {}
+    BinaryTree() = default;
 
-    BinaryTree(const BinaryTree& other) : root(nullptr), size(0) { root = CopyNodes(other.root); }
+    BinaryTree(const BinaryTree &other) : Root(nullptr), size(0) { Root = CopyNodes(other.Root); }
 
-    BinaryTree(BinaryTree&& other) noexcept : root(other.root), size(other.size) {
-        other.root = nullptr;
+    BinaryTree(BinaryTree &&other) noexcept : Root(other.Root), size(other.size)
+    {
+        other.Root = nullptr;
         other.size = 0;
     }
 
-    BinaryTree& operator=(const BinaryTree& other) {
-        BinaryTree copy(other);
-        Swap(copy);
+    BinaryTree &operator=(const BinaryTree &other)
+    {
+        if (this != &other)
+        {
+            BinaryTree temp(other);
+            std::swap(Root, temp.Root);
+            std::swap(size, temp.size);
+        }
         return *this;
     }
 
-    BinaryTree& operator=(BinaryTree&& other) noexcept {
-        BinaryTree moved(std::move(other));
-        Swap(moved);
+    BinaryTree &operator=(BinaryTree &&other) noexcept
+    {
+        if (this != &other)
+        {
+            Root = other.Root;
+            size = other.size;
+            other.Root = nullptr;
+            other.size = 0;
+        }
         return *this;
     }
 
-    ~BinaryTree() { DeleteNodes(root); }
-
-    void Clear() {
-        DeleteNodes(root);
-        root = nullptr;
-    }
+    ~BinaryTree() { DeleteNodes(Root); }
 
     std::size_t GetSize() const { return size; }
     bool IsEmpty() const { return size == 0; }
-    int GetHeight() const { return Height(root); }
-    bool IsBalanced() const { return CheckBalance(root); }
+    int GetHeight() const { return Height(Root); }
 
-    bool Insert(const T& value) { return InsertValue(value, true); }
+    void Insert(const TKey &k, const TValue &Val) { Root = InsertNode(Root, k, Val); }
 
-    bool Remove(const T& value) {
-        std::size_t before = size;
-        root = RemoveNode(root, value);
-        return size != before;
+    bool Search(const TKey &k) const { return FindNode(k) != nullptr; }
+
+    void Remove(const TKey &k)
+    {
+        if (!Search(k))
+            throw InvalidArgument("В дереве нет удаляемого элемента.");
+        Root = RemoveNode(Root, k);
     }
 
-    bool Contains(const T& value) const { return FindNode(value) != nullptr; }
+    void Traverse(const Traverser &usersFunc, const std::function<void(const TValue &)> &action) const
+    {
+        usersFunc(action, Root);
+    }
 
-    Iterator begin() const { return Iterator(root); }
-    Iterator end() const { return Iterator(); }
-
-    void Traverse(Order order, const Action& action) const {
-        switch (order) {
-            case Order::KLP: KLP(root, action); break;
-            case Order::KPL: KPL(root, action); break;
-            case Order::LKP: LKP(root, action); break;
-            case Order::LPK: LPK(root, action); break;
-            case Order::PLK: PLK(root, action); break;
-            case Order::PKL: PKL(root, action); break;
+    TreeEnumerator begin() const
+    {
+        TreeEnumerator beg;
+        Node *temp = Root;
+        while (temp)
+        {
+            beg.path.Push(temp);
+            temp = temp->left;
         }
-    }
-
-    template <typename F>
-    BinaryTree Map(F f) const {
-        BinaryTree result;
-        Traverse(Order::KLP, [&](const T& value) { result.Insert(f(value)); });
-        return result;
-    }
-
-    template <typename Predicate>
-    BinaryTree Where(Predicate predicate) const {
-        BinaryTree result;
-        Traverse(Order::KLP, [&](const T& value) {
-            if (predicate(value)) result.Insert(value);
-        });
-        return result;
-    }
-
-    template <typename F>
-    T Reduce(F f, const T& start) const {
-        T accumulator = start;
-        Traverse(Order::LKP, [&](const T& value) { accumulator = f(value, accumulator); });
-        return accumulator;
-    }
-
-    std::string ToString(Order order = Order::KLP) const {
-        std::ostringstream out;
-        bool first = true;
-        Action print = [&](const T& value) {
-            if (!first) out << ' ';
-            out << value;
-            first = false;
-        };
-        Traverse(order, print);
-        return out.str();
-    }
-
-    void LoadFromString(const std::string& text) {
-        BinaryTree loaded;
-        std::istringstream in(text);
-        while (in >> std::ws && !in.eof()) {
-            T value;
-            if (!(in >> value)) throw InvalidArgument("BinaryTree::LoadFromString: bad element");
-            loaded.InsertValue(value, false);
+        if (!beg.path.IsEmpty())
+        {
+            beg.current = beg.path.Top();
+            beg.path.Pop();
         }
-        if (!loaded.IsBalanced()) {
-            BinaryTree balanced;
-            loaded.Traverse(Order::KLP, [&](const T& value) { balanced.Insert(value); });
-            loaded.Swap(balanced);
-        }
-        Swap(loaded);
+        return beg;
     }
 
-    BinaryTree ExtractSubtree(const T& value) const {
-        BinaryTree result;
-        result.root = result.CopyNodes(FindNode(value));
-        return result;
-    }
-
-    bool ContainsSubtree(const BinaryTree& other) const {
-        if (other.root == nullptr) return true;
-        return EqualNodes(FindNode(other.root->value), other.root);
-    }
-
-    bool operator==(const BinaryTree& other) const {
-        return size == other.size && EqualNodes(root, other.root);
-    }
-
-    bool operator!=(const BinaryTree& other) const { return !(*this == other); }
+    TreeEnumerator end() const { return TreeEnumerator(); }
 };
+
+template <typename TKey, typename TValue>
+void KLPrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    if (!n)
+        return;
+    action(n->GetValue());
+    KLPrec<TKey, TValue>(action, n->GetLeft());
+    KLPrec<TKey, TValue>(action, n->GetRight());
+}
+
+template <typename TKey, typename TValue>
+void KPLrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    if (!n)
+        return;
+    action(n->GetValue());
+    KPLrec<TKey, TValue>(action, n->GetRight());
+    KPLrec<TKey, TValue>(action, n->GetLeft());
+}
+
+template <typename TKey, typename TValue>
+void LPKrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    if (!n)
+        return;
+    LPKrec<TKey, TValue>(action, n->GetLeft());
+    LPKrec<TKey, TValue>(action, n->GetRight());
+    action(n->GetValue());
+}
+
+template <typename TKey, typename TValue>
+void LKPrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    if (!n)
+        return;
+    LKPrec<TKey, TValue>(action, n->GetLeft());
+    action(n->GetValue());
+    LKPrec<TKey, TValue>(action, n->GetRight());
+}
+
+template <typename TKey, typename TValue>
+void PLKrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    if (!n)
+        return;
+    PLKrec<TKey, TValue>(action, n->GetRight());
+    PLKrec<TKey, TValue>(action, n->GetLeft());
+    action(n->GetValue());
+}
+
+template <typename TKey, typename TValue>
+void PKLrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    if (!n)
+        return;
+    PKLrec<TKey, TValue>(action, n->GetRight());
+    action(n->GetValue());
+    PKLrec<TKey, TValue>(action, n->GetLeft());
+}
+
+template <typename TKey, typename TValue>
+void LKPiter(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+{
+    Stack<typename BinaryTree<TKey, TValue>::Node *> stack;
+    typename BinaryTree<TKey, TValue>::Node *current = n;
+    while (current != nullptr || !stack.IsEmpty())
+    {
+        while (current != nullptr)
+        {
+            stack.Push(current);
+            current = current->GetLeft();
+        }
+        current = stack.Top();
+        stack.Pop();
+        action(current->GetValue());
+        current = current->GetRight();
+    }
+}
