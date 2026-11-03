@@ -1,77 +1,55 @@
 #pragma once
 #include <cstddef>
 #include <ostream>
-#include "BinaryTree.h"
+#include <sstream>
 #include <string>
+#include "BinaryTree.h"
 
 template <typename T>
 class Set
 {
 private:
     BinaryTree<T, T> tree;
-    Set(const BinaryTree<T, T> &t) : tree(t) {}
 
 public:
     Set() = default;
 
-    bool Add(const T &value)
-    {
-        try
-        {
-            tree.Insert(value, value);
-            return true;
-        }
-        catch (...)
-        {
-            return false;
-        }
-    }
+    bool Add(const T &value) { return tree.insert(value, value); }
+    bool Remove(const T &value) { return tree.remove(value); }
+    bool Contains(const T &value) const { return tree.contains(value); }
 
-    bool Remove(const T &value)
+    std::size_t GetSize() const
     {
-        try
-        {
-            tree.Remove(value);
-            return true;
-        }
-        catch (...)
-        {
-            return false;
-        }
+        std::size_t n = 0;
+        for (auto it = tree.begin(); it != tree.end(); ++it)
+            ++n;
+        return n;
     }
-
-    bool Contains(const T &value) const { return tree.Search(value); }
-    std::size_t GetSize() const { return tree.GetSize(); }
-    bool IsEmpty() const { return tree.IsEmpty(); }
+    bool IsEmpty() const { return tree.begin() == tree.end(); }
 
     Set Union(const Set &other) const
     {
         Set result = *this;
-        other.tree.Traverse(LKPrec<T, T>, [&](const T &value)
-                            {
-            try { result.tree.Insert(value, value); } catch (...) {} });
+        for (auto it = other.tree.begin(); it != other.tree.end(); ++it)
+            result.tree.insert(*it, *it);
         return result;
     }
 
     Set Intersection(const Set &other) const
     {
         Set result;
-        tree.Traverse(LKPrec<T, T>, [&](const T &value)
-                      {
-            if (other.tree.Search(value)) {
-                try { result.tree.Insert(value, value); } catch (...) {}
-            } });
+        for (auto it = tree.begin(); it != tree.end(); ++it)
+            if (other.tree.contains(*it))
+                result.tree.insert(*it, *it);
         return result;
     }
 
     Set Difference(const Set &other) const
     {
         Set result;
-        tree.Traverse(LKPrec<T, T>, [&](const T &value)
-                      {
-            if (!other.tree.Search(value)) {
-                try { result.tree.Insert(value, value); } catch (...) {}
-            } });
+        for (auto it = tree.begin(); it != tree.end(); ++it)
+            if (!other.tree.contains(*it))
+                result.tree.insert(*it, *it);
         return result;
     }
 
@@ -79,25 +57,29 @@ public:
     {
         if (GetSize() > other.GetSize())
             return false;
-        std::size_t found = 0;
-        tree.Traverse(LKPrec<T, T>, [&](const T &value)
-                      {
-            if (other.tree.Search(value)) found++; });
-        return found == GetSize();
+        for (auto it = tree.begin(); it != tree.end(); ++it)
+            if (!other.tree.contains(*it))
+                return false; 
+        return true;
     }
 
-    bool Equals(const Set &other) const { return GetSize() == other.GetSize() && IsSubsetOf(other); }
+    bool Equals(const Set &other) const
+    {
+        return GetSize() == other.GetSize() && IsSubsetOf(other);
+    }
 
     std::string ToString() const
     {
         std::ostringstream out;
         out << "{";
         bool first = true;
-        tree.Traverse(LKPrec<T, T>, [&](const T &value)
-                      {
-            if (!first) out << ' ';
-            out << value;
-            first = false; });
+        for (auto it = tree.begin(); it != tree.end(); ++it)
+        {
+            if (!first)
+                out << ' ';
+            out << *it;
+            first = false;
+        }
         out << "}";
         return out.str();
     }

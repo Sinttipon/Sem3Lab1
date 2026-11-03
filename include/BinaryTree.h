@@ -1,207 +1,206 @@
 #pragma once
 
 #include "Stack.h"
+#include <stack>
 #include "exceptions.hpp"
 #include <functional>
-#include <utility>
+#include "Pair.hpp"
+#include <memory>
+#include <concepts>
 
-template <typename TKey, typename TValue>
-class TreeFormatter;
+struct KlpStrategy;
+struct KplStrategy;
+struct LkpStrategy;
+struct PklStrategy;
+struct LpkStrategy;
+struct PlkStrategy;
 
-template <typename TKey, typename TValue>
+template <typename Policy, typename NodePtr, typename StackRef>
+concept IsTraversalPolicy = requires(NodePtr node, StackRef stack) {
+    { Policy::start(node, stack) } -> std::convertible_to<NodePtr>;
+    { Policy::increment(node, stack) } -> std::convertible_to<NodePtr>;
+};
+
+template <std::totally_ordered TKey, typename TValue>
 class BinaryTree
 {
 public:
     class Node
     {
     private:
-        TKey key;
-        TValue value;
-        Node *left = nullptr;
-        Node *right = nullptr;
-        int height = 1;
+        Pair<TKey, TValue> data;
+        std::shared_ptr<Node> left;
+        std::shared_ptr<Node> right;
+        unsigned short height = 1;
 
         friend class BinaryTree<TKey, TValue>;
-        template <typename K, typename V>
-        friend class TreeFormatter;
 
     public:
         Node() = default;
-        Node(TKey k, TValue v, Node *l = nullptr, Node *r = nullptr)
-            : key(k), value(v), left(l), right(r), height(1) {}
+        Node(TKey key, TValue value, std::shared_ptr<Node> leftNode = nullptr, std::shared_ptr<Node> rightNode = nullptr)
+            : data(key, value), left(std::move(leftNode)), right(std::move(rightNode)), height(1) {}
         ~Node() = default;
 
-        const TValue &GetValue() const { return value; }
-        const TKey &GetKey() const { return key; }
-        Node *GetLeft() const { return left; }
-        Node *GetRight() const { return right; }
+        const TValue &getValue() const
+        {
+            return data.second;
+        }
+
+        const TKey &getKey() const
+        {
+            return data.first;
+        }
+
+        std::shared_ptr<Node> getLeft() const
+        {
+            return left;
+        }
+
+        std::shared_ptr<Node> getRight() const
+        {
+            return right;
+        }
     };
 
-    typedef std::function<void(const std::function<void(const TValue &)> &, Node *)> Traverser;
-
 private:
-    Node *Root = nullptr;
-    std::size_t size = 0;
+    std::shared_ptr<Node> root;
 
-    template <typename K, typename V>
-    friend class TreeFormatter;
-
-    int Height(Node *node) const { return node ? node->height : 0; }
-
-    void UpdateHeight(Node *node)
-    {
-        if (node)
-        {
-            int hl = Height(node->left);
-            int hr = Height(node->right);
-            node->height = (hl > hr ? hl : hr) + 1;
-        }
-    }
-
-    int BalanceFactor(Node *node) const { return node ? Height(node->left) - Height(node->right) : 0; }
-
-    Node *RotateRight(Node *y)
-    {
-        Node *x = y->left;
-        y->left = x->right;
-        x->right = y;
-        UpdateHeight(y);
-        UpdateHeight(x);
-        return x;
-    }
-
-    Node *RotateLeft(Node *x)
-    {
-        Node *y = x->right;
-        x->right = y->left;
-        y->left = x;
-        UpdateHeight(x);
-        UpdateHeight(y);
-        return y;
-    }
-
-    Node *Balance(Node *node)
+    std::shared_ptr<Node> copyNodes(const std::shared_ptr<const Node> &node)
     {
         if (!node)
-            return node;
-        UpdateHeight(node);
-        int bf = BalanceFactor(node);
-        if (bf > 1)
+            return nullptr;
+        auto newNode = std::make_shared<Node>(node->getKey(), node->getValue());
+        newNode->height = node->height;
+        newNode->left = copyNodes(node->getLeft());
+        newNode->right = copyNodes(node->getRight());
+        return newNode;
+    }
+
+    unsigned short getNodeHeight(const std::shared_ptr<const Node> &node) const
+    {
+        return node ? node->height : 0;
+    }
+
+    void updateHeight(const std::shared_ptr<Node> &node)
+    {
+        unsigned short leftHeight = getNodeHeight(node->getLeft());
+        unsigned short rightHeight = getNodeHeight(node->getRight());
+        node->height = (leftHeight > rightHeight ? leftHeight : rightHeight) + 1;
+    }
+
+    short getBalanceFactor(const std::shared_ptr<const Node> &node) const
+    {
+        return static_cast<short>(getNodeHeight(node->getLeft())) - static_cast<short>(getNodeHeight(node->getRight()));
+    }
+
+    std::shared_ptr<Node> rotateRight(std::shared_ptr<Node> yNode)
+    {
+        std::shared_ptr<Node> xNode = std::move(yNode->left);
+        yNode->left = std::move(xNode->right);
+        updateHeight(yNode);
+        xNode->right = std::move(yNode);
+        updateHeight(xNode);
+        return xNode;
+    }
+
+    std::shared_ptr<Node> rotateLeft(std::shared_ptr<Node> xNode)
+    {
+        std::shared_ptr<Node> yNode = std::move(xNode->right);
+        xNode->right = std::move(yNode->left);
+        updateHeight(xNode);
+        yNode->left = std::move(xNode);
+        updateHeight(yNode);
+        return yNode;
+    }
+
+    std::shared_ptr<Node> balanceNode(std::shared_ptr<Node> node)
+    {
+        updateHeight(node);
+        short balanceFactor = getBalanceFactor(node);
+
+        if (balanceFactor > 1)
         {
-            if (BalanceFactor(node->left) < 0)
-                node->left = RotateLeft(node->left);
-            return RotateRight(node);
+            if (getBalanceFactor(node->getLeft()) < 0)
+                node->left = rotateLeft(std::move(node->left));
+            return rotateRight(std::move(node));
         }
-        if (bf < -1)
+        if (balanceFactor < -1)
         {
-            if (BalanceFactor(node->right) > 0)
-                node->right = RotateRight(node->right);
-            return RotateLeft(node);
+            if (getBalanceFactor(node->getRight()) > 0)
+                node->right = rotateRight(std::move(node->right));
+            return rotateLeft(std::move(node));
         }
         return node;
     }
 
-    void DeleteNodes(Node *&TempNode)
-    {
-        if (TempNode == nullptr)
-            return;
-        DeleteNodes(TempNode->right);
-        DeleteNodes(TempNode->left);
-        delete TempNode;
-        TempNode = nullptr;
-        size--;
-    }
-
-    Node *CopyNodes(Node *node)
+    std::shared_ptr<Node> insertNode(std::shared_ptr<Node> node, const TKey &key, const TValue &value)
     {
         if (!node)
-            return nullptr;
-        Node *newNode = new Node(node->key, node->value);
-        newNode->left = CopyNodes(node->left);
-        newNode->right = CopyNodes(node->right);
-        newNode->height = node->height;
-        size++;
-        return newNode;
-    }
-
-    Node *InsertNode(Node *node, const TKey &k, const TValue &Val)
-    {
-        if (!node)
+            return std::make_shared<Node>(key, value);
+        if (key < node->data.first)
         {
-            size++;
-            return new Node(k, Val);
+            node->left = insertNode(std::move(node->left), key, value);
         }
-        if (k < node->key)
-            node->left = InsertNode(node->left, k, Val);
-        else if (node->key < k)
-            node->right = InsertNode(node->right, k, Val);
+        else if (key > node->data.first)
+        {
+            node->right = insertNode(std::move(node->right), key, value);
+        }
         else
+        {
             throw InvalidArgument("Добавляемый элемент уже есть в дереве.");
-        return Balance(node);
+        }
+        return balanceNode(std::move(node));
     }
 
-    Node *RemoveMin(Node *node, Node *&min)
+    std::shared_ptr<Node> removeMin(std::shared_ptr<Node> node, std::shared_ptr<Node> &minNode)
     {
         if (!node->left)
         {
-            min = node;
-            return node->right;
+            minNode = std::move(node);
+            return std::move(minNode->right);
         }
-        node->left = RemoveMin(node->left, min);
-        return Balance(node);
+        node->left = removeMin(std::move(node->left), minNode);
+        return balanceNode(std::move(node));
     }
 
-    Node *RemoveNode(Node *node, const TKey &k)
+    std::shared_ptr<Node> removeNode(std::shared_ptr<Node> node, const TKey &key)
     {
         if (!node)
-            return nullptr;
-        if (k < node->key)
+            throw InvalidArgument("В дереве нет удаляемого элемента.");
+        if (key < node->data.first)
         {
-            node->left = RemoveNode(node->left, k);
-            return Balance(node);
+            node->left = removeNode(std::move(node->left), key);
+            return balanceNode(std::move(node));
         }
-        if (node->key < k)
+        if (key > node->data.first)
         {
-            node->right = RemoveNode(node->right, k);
-            return Balance(node);
+            node->right = removeNode(std::move(node->right), key);
+            return balanceNode(std::move(node));
         }
 
-        Node *left = node->left;
-        Node *right = node->right;
-        delete node;
-        size--;
+        std::shared_ptr<Node> leftNode = std::move(node->left);
+        std::shared_ptr<Node> rightNode = std::move(node->right);
+        node.reset();
 
-        if (!right)
-            return left;
+        if (!rightNode)
+            return leftNode;
 
-        Node *min = nullptr;
-        right = RemoveMin(right, min);
-        min->left = left;
-        min->right = right;
-        return Balance(min);
-    }
-
-    const Node *FindNode(const TKey &k) const
-    {
-        const Node *node = Root;
-        while (node != nullptr)
-        {
-            if (k < node->key)
-                node = node->left;
-            else if (node->key < k)
-                node = node->right;
-            else
-                return node;
-        }
-        return nullptr;
+        std::shared_ptr<Node> minNode;
+        rightNode = removeMin(std::move(rightNode), minNode);
+        minNode->left = std::move(leftNode);
+        minNode->right = std::move(rightNode);
+        return balanceNode(std::move(minNode));
     }
 
 public:
+    template <typename TraversalPolicy>
+        requires IsTraversalPolicy<TraversalPolicy, std::shared_ptr<Node>, Stack<std::shared_ptr<Node>> &>
     class TreeEnumerator
     {
     private:
-        Node *current = nullptr;
-        Stack<Node *> path;
+        std::weak_ptr<Node> current;
+        Stack<std::shared_ptr<Node>> path;
+
         friend class BinaryTree<TKey, TValue>;
 
     public:
@@ -209,202 +208,366 @@ public:
 
         const TValue &operator*() const
         {
-            if (!current)
-                throw EndOfStreamException("Попытка разыменования пустого итератора.");
-            return current->value;
-        }
-
-        const Node *operator->() const
-        {
-            if (!current)
-                throw EndOfStreamException("Попытка разыменования пустого итератора.");
-            return current;
+            auto sharedCurrent = current.lock();
+            if (!sharedCurrent)
+            {
+                throw NullPointerException("Попытка разыменования пустого итератора.");
+            }
+            return sharedCurrent->data.second;
         }
 
         TreeEnumerator &operator++()
         {
-            if (!current)
-                return *this;
-            if (current->right)
-            {
-                Node *temp = current->right;
-                while (temp)
-                {
-                    path.Push(temp);
-                    temp = temp->left;
-                }
-            }
-            if (!path.IsEmpty())
-            {
-                current = path.Top();
-                path.Pop();
-            }
-            else
-                current = nullptr;
+            current = TraversalPolicy::increment(current.lock(), path);
             return *this;
         }
 
         TreeEnumerator operator++(int)
         {
-            TreeEnumerator temp = *this;
+            TreeEnumerator temporaryIterator = *this;
             ++(*this);
-            return temp;
+            return temporaryIterator;
         }
 
-        bool operator!=(const TreeEnumerator &other) const { return current != other.current; }
-        bool operator==(const TreeEnumerator &other) const { return current == other.current; }
+        bool operator!=(const TreeEnumerator &other) const
+        {
+            return current.lock() != other.current.lock();
+        }
+
+        bool operator==(const TreeEnumerator &other) const
+        {
+            return current.lock() == other.current.lock();
+        }
     };
 
     BinaryTree() = default;
 
-    BinaryTree(const BinaryTree &other) : Root(nullptr), size(0) { Root = CopyNodes(other.Root); }
-
-    BinaryTree(BinaryTree &&other) noexcept : Root(other.Root), size(other.size)
+    BinaryTree(const BinaryTree &other)
     {
-        other.Root = nullptr;
-        other.size = 0;
+        root = copyNodes(other.root);
     }
 
     BinaryTree &operator=(const BinaryTree &other)
     {
-        if (this != &other)
-        {
-            BinaryTree temp(other);
-            std::swap(Root, temp.Root);
-            std::swap(size, temp.size);
-        }
+        if (this == &other)
+            return *this;
+        root = copyNodes(other.root);
         return *this;
     }
+
+    BinaryTree(BinaryTree &&other) noexcept : root(std::move(other.root)) {}
 
     BinaryTree &operator=(BinaryTree &&other) noexcept
     {
-        if (this != &other)
-        {
-            Root = other.Root;
-            size = other.size;
-            other.Root = nullptr;
-            other.size = 0;
-        }
+        if (this == &other)
+            return *this;
+        root = std::move(other.root);
         return *this;
     }
 
-    ~BinaryTree() { DeleteNodes(Root); }
+    ~BinaryTree() = default;
 
-    std::size_t GetSize() const { return size; }
-    bool IsEmpty() const { return size == 0; }
-    int GetHeight() const { return Height(Root); }
-
-    void Insert(const TKey &k, const TValue &Val) { Root = InsertNode(Root, k, Val); }
-
-    bool Search(const TKey &k) const { return FindNode(k) != nullptr; }
-
-    void Remove(const TKey &k)
+    void insert(const TKey &key, const TValue &value)
     {
-        if (!Search(k))
-            throw InvalidArgument("В дереве нет удаляемого элемента.");
-        Root = RemoveNode(Root, k);
+        root = insertNode(std::move(root), key, value);
     }
 
-    void Traverse(const Traverser &usersFunc, const std::function<void(const TValue &)> &action) const
+    bool contains(const TKey &key) const
     {
-        usersFunc(action, Root);
-    }
-
-    TreeEnumerator begin() const
-    {
-        TreeEnumerator beg;
-        Node *temp = Root;
-        while (temp)
+        if (!root)
+            return false;
+        std::shared_ptr<Node> current = root;
+        while (current)
         {
-            beg.path.Push(temp);
-            temp = temp->left;
+            if (key < current->data.first)
+            {
+                current = current->getLeft();
+            }
+            else if (key > current->data.first)
+            {
+                current = current->getRight();
+            }
+            else
+            {
+                return true;
+            }
         }
-        if (!beg.path.IsEmpty())
-        {
-            beg.current = beg.path.Top();
-            beg.path.Pop();
-        }
-        return beg;
+        return false;
     }
 
-    TreeEnumerator end() const { return TreeEnumerator(); }
+    void remove(const TKey &key)
+    {
+        root = removeNode(std::move(root), key);
+    }
+
+    std::size_t GetSize() const
+    {
+        std::size_t size = 0;
+        for (auto it = begin<LkpStrategy>(); it != end<LkpStrategy>(); ++it)
+        {
+            ++size;
+        }
+        return size;
+    }
+
+    template <typename TraversalPolicy>
+    void traverse(const std::function<void(const TValue &)> &action) const
+    {
+        for (auto iterator = begin<TraversalPolicy>(); iterator != end<TraversalPolicy>(); ++iterator)
+        {
+            action(*iterator);
+        }
+    }
+
+    template <typename TraversalPolicy>
+        requires IsTraversalPolicy<TraversalPolicy, std::shared_ptr<Node>, Stack<std::shared_ptr<Node>> &>
+    TreeEnumerator<TraversalPolicy> begin() const
+    {
+        TreeEnumerator<TraversalPolicy> beginIterator;
+        beginIterator.current = TraversalPolicy::start(root, beginIterator.path);
+        return beginIterator;
+    }
+
+    template <typename TraversalPolicy>
+        requires IsTraversalPolicy<TraversalPolicy, std::shared_ptr<Node>, Stack<std::shared_ptr<Node>> &>
+    TreeEnumerator<TraversalPolicy> end() const
+    {
+        return TreeEnumerator<TraversalPolicy>();
+    }
 };
 
-template <typename TKey, typename TValue>
-void KLPrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
+struct KlpStrategy
 {
-    if (!n)
-        return;
-    action(n->GetValue());
-    KLPrec<TKey, TValue>(action, n->GetLeft());
-    KLPrec<TKey, TValue>(action, n->GetRight());
-}
-
-template <typename TKey, typename TValue>
-void KPLrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
-{
-    if (!n)
-        return;
-    action(n->GetValue());
-    KPLrec<TKey, TValue>(action, n->GetRight());
-    KPLrec<TKey, TValue>(action, n->GetLeft());
-}
-
-template <typename TKey, typename TValue>
-void LPKrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
-{
-    if (!n)
-        return;
-    LPKrec<TKey, TValue>(action, n->GetLeft());
-    LPKrec<TKey, TValue>(action, n->GetRight());
-    action(n->GetValue());
-}
-
-template <typename TKey, typename TValue>
-void LKPrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
-{
-    if (!n)
-        return;
-    LKPrec<TKey, TValue>(action, n->GetLeft());
-    action(n->GetValue());
-    LKPrec<TKey, TValue>(action, n->GetRight());
-}
-
-template <typename TKey, typename TValue>
-void PLKrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
-{
-    if (!n)
-        return;
-    PLKrec<TKey, TValue>(action, n->GetRight());
-    PLKrec<TKey, TValue>(action, n->GetLeft());
-    action(n->GetValue());
-}
-
-template <typename TKey, typename TValue>
-void PKLrec(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
-{
-    if (!n)
-        return;
-    PKLrec<TKey, TValue>(action, n->GetRight());
-    action(n->GetValue());
-    PKLrec<TKey, TValue>(action, n->GetLeft());
-}
-
-template <typename TKey, typename TValue>
-void LKPiter(const std::function<void(const TValue &)> &action, typename BinaryTree<TKey, TValue>::Node *n)
-{
-    Stack<typename BinaryTree<TKey, TValue>::Node *> stack;
-    typename BinaryTree<TKey, TValue>::Node *current = n;
-    while (current != nullptr || !stack.IsEmpty())
+    template <typename NodePtr, typename StackRef>
+    static NodePtr start(NodePtr root, StackRef &path)
     {
-        while (current != nullptr)
-        {
-            stack.Push(current);
-            current = current->GetLeft();
-        }
-        current = stack.Top();
-        stack.Pop();
-        action(current->GetValue());
-        current = current->GetRight();
+        return root;
     }
-}
+
+    template <typename NodePtr, typename StackRef>
+    static NodePtr increment(NodePtr current, StackRef &path)
+    {
+        if (current)
+        {
+            if (current->getRight())
+                path.Push(current->getRight());
+            if (current->getLeft())
+                return current->getLeft();
+        }
+        if (!path.IsEmpty())
+        {
+            auto nextNode = path.Top();
+            path.Pop();
+            return nextNode;
+        }
+        return nullptr;
+    }
+};
+
+struct KplStrategy
+{
+    template <typename NodePtr, typename StackRef>
+    static NodePtr start(NodePtr root, StackRef &path)
+    {
+        return root;
+    }
+
+    template <typename NodePtr, typename StackRef>
+    static NodePtr increment(NodePtr current, StackRef &path)
+    {
+        if (current)
+        {
+            if (current->getLeft())
+                path.Push(current->getLeft());
+            if (current->getRight())
+                return current->getRight();
+        }
+        if (!path.IsEmpty())
+        {
+            auto nextNode = path.Top();
+            path.Pop();
+            return nextNode;
+        }
+        return nullptr;
+    }
+};
+
+struct LkpStrategy
+{
+    template <typename NodePtr, typename StackRef>
+    static NodePtr start(NodePtr root, StackRef &path)
+    {
+        if (!root)
+            return nullptr;
+        auto current = root;
+        while (current->getLeft())
+        {
+            path.Push(current);
+            current = current->getLeft();
+        }
+        return current;
+    }
+
+    template <typename NodePtr, typename StackRef>
+    static NodePtr increment(NodePtr current, StackRef &path)
+    {
+        if (!current)
+            return current;
+        if (current->getRight())
+        {
+            auto tempNode = current->getRight();
+            path.Push(tempNode);
+            while (tempNode->getLeft())
+            {
+                tempNode = tempNode->getLeft();
+                path.Push(tempNode);
+            }
+        }
+        if (!path.IsEmpty())
+        {
+            current = path.Top();
+            path.Pop();
+        }
+        else
+        {
+            current = nullptr;
+        }
+        return current;
+    }
+};
+
+struct PklStrategy
+{
+    template <typename NodePtr, typename StackRef>
+    static NodePtr start(NodePtr root, StackRef &path)
+    {
+        if (!root)
+            return nullptr;
+        auto current = root;
+        while (current->getRight())
+        {
+            path.Push(current);
+            current = current->getRight();
+        }
+        return current;
+    }
+
+    template <typename NodePtr, typename StackRef>
+    static NodePtr increment(NodePtr current, StackRef &path)
+    {
+        if (!current)
+            return nullptr;
+        if (current->getLeft())
+        {
+            auto tempNode = current->getLeft();
+            path.Push(tempNode);
+            while (tempNode->getRight())
+            {
+                tempNode = tempNode->getRight();
+                path.Push(tempNode);
+            }
+        }
+        if (!path.IsEmpty())
+        {
+            current = path.Top();
+            path.Pop();
+        }
+        else
+        {
+            current = nullptr;
+        }
+        return current;
+    }
+};
+
+struct LpkStrategy
+{
+    template <typename NodePtr, typename StackRef>
+    static NodePtr start(NodePtr root, StackRef &path)
+    {
+        if (!root)
+            return nullptr;
+        auto current = root;
+        while (current->getLeft() || current->getRight())
+        {
+            path.Push(current);
+            if (current->getLeft())
+                current = current->getLeft();
+            else
+                current = current->getRight();
+        }
+        return current;
+    }
+
+    template <typename NodePtr, typename StackRef>
+    static NodePtr increment(NodePtr current, StackRef &path)
+    {
+        if (path.IsEmpty())
+            return nullptr;
+        auto parent = path.Top();
+        if (parent->getRight() && parent->getRight() != current)
+        {
+            auto tempNode = parent->getRight();
+            while (tempNode->getLeft() || tempNode->getRight())
+            {
+                path.Push(tempNode);
+                if (tempNode->getLeft())
+                    tempNode = tempNode->getLeft();
+                else
+                    tempNode = tempNode->getRight();
+            }
+            return tempNode;
+        }
+        else
+        {
+            path.Pop();
+            return parent;
+        }
+    }
+};
+
+struct PlkStrategy
+{
+    template <typename NodePtr, typename StackRef>
+    static NodePtr start(NodePtr root, StackRef &path)
+    {
+        if (!root)
+            return nullptr;
+        auto current = root;
+        while (current->getRight() || current->getLeft())
+        {
+            path.Push(current);
+            if (current->getRight())
+                current = current->getRight();
+            else
+                current = current->getLeft();
+        }
+        return current;
+    }
+
+    template <typename NodePtr, typename StackRef>
+    static NodePtr increment(NodePtr current, StackRef &path)
+    {
+        if (path.IsEmpty())
+            return nullptr;
+        auto parent = path.Top();
+        if (parent->getLeft() && parent->getLeft() != current)
+        {
+            auto tempNode = parent->getLeft();
+            while (tempNode->getRight() || tempNode->getLeft())
+            {
+                path.Push(tempNode);
+                if (tempNode->getRight())
+                    tempNode = tempNode->getRight();
+                else
+                    tempNode = tempNode->getLeft();
+            }
+            return tempNode;
+        }
+        else
+        {
+            path.Pop();
+            return parent;
+        }
+    }
+};

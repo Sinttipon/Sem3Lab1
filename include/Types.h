@@ -42,7 +42,6 @@ struct Student
     int birthYear;
     Student(int i = 0, const std::string &last = "", const std::string &first = "", int year = 2000)
         : id(i), lastName(last), firstName(first), birthYear(year) {}
-    std::string GetFullName() const { return lastName + " " + firstName; }
 };
 
 inline std::ostream &operator<<(std::ostream &out, const Student &s)

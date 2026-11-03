@@ -69,3 +69,9 @@ class EndOfStreamException : public DataStructureException
 public:
     EndOfStreamException(const std::string &msg) : DataStructureException(msg) {}
 };
+
+class NullPointerException : public DataStructureException
+{
+public:
+    NullPointerException(const std::string &msg) : DataStructureException(msg) {}
+};

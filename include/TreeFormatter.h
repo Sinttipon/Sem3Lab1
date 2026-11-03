@@ -1,8 +1,8 @@
 #pragma once
 #include <ostream>
 #include <sstream>
-#include "BinaryTree.h"
 #include <string>
+#include "BinaryTree.h"
 
 template <typename TKey, typename TValue>
 class TreeFormatter
@@ -18,13 +18,13 @@ private:
         for (char c : format)
         {
             if (c == 'K')
-                out << node->GetKey();
+                out << node->getKey();
             else if (c == 'V')
-                out << node->GetValue();
+                out << node->getValue();
             else if (c == 'L')
-                Write(node->GetLeft(), out);
+                Write(node->getLeft().get(), out);
             else if (c == 'P')
-                Write(node->GetRight(), out);
+                Write(node->getRight().get(), out);
             else
                 out << c;
         }
@@ -36,7 +36,7 @@ public:
     std::string Format(const BinaryTree<TKey, TValue> &tree) const
     {
         std::ostringstream out;
-        Write(tree.Root, out);
+        Write(tree.getRoot().get(), out);
         return out.str();
     }
 };
