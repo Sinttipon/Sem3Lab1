@@ -5,7 +5,6 @@
 #include "exceptions.hpp"
 #include <functional>
 #include "Pair.hpp"
-#include <memory>
 #include <concepts>
 
 struct KlpStrategy;
@@ -60,6 +59,8 @@ public:
         {
             return right;
         }
+
+        std::shared_ptr<const Node> getRoot() const { return root; }
     };
 
 private:
@@ -269,6 +270,8 @@ public:
 
     void insert(const TKey &key, const TValue &value)
     {
+        if (contains(key))
+            throw InvalidArgument("Добавляемый элемент уже есть в дереве.");
         root = insertNode(std::move(root), key, value);
     }
 
@@ -297,6 +300,8 @@ public:
 
     void remove(const TKey &key)
     {
+        if (!contains(key))
+            throw InvalidArgument("В дереве нет удаляемого элемента.");
         root = removeNode(std::move(root), key);
     }
 

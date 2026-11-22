@@ -1,12 +1,12 @@
 #pragma once
 #include <string>
 #include <sstream>
-
-class IException
+#include <exception>
+class IException : public std::exception
 {
 public:
     virtual ~IException() = default;
-    virtual const char *what() const noexcept = 0;
+    const char *what() const noexcept override = 0;
 };
 
 class DataStructureException : public IException

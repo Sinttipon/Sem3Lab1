@@ -25,7 +25,7 @@ add_executable(main src/main.cpp)
 target_link_libraries(main PRIVATE lab1)
 
 add_executable(benchmark tests/benchmark.cpp)
-target_link_libraries(benchmark PRIVATE lab1) # замени lab1 на имя твоей библиотеки, если она выделена, либо убери строчку линковки, если всё в заголовках
+target_link_libraries(benchmark PRIVATE lab1) 
 target_compile_features(benchmark PRIVATE cxx_std_20)
 
 

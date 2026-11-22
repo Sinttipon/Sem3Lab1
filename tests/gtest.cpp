@@ -18,8 +18,8 @@ namespace
     std::string ToStringLKP(BinaryTree<TKey, TValue> &tree)
     {
         std::string result;
-        tree.traverse<LkpStrategy>([&](const TValue &v)
-                                   {
+        tree.template traverse<LkpStrategy>([&](const TValue &v)
+                                            {
             std::ostringstream oss; oss << v;
             if (!result.empty()) result += ' ';
             result += oss.str(); });
@@ -30,8 +30,8 @@ namespace
     std::string ToStringKLP(BinaryTree<TKey, TValue> &tree)
     {
         std::string result;
-        tree.traverse<KlpStrategy>([&](const TValue &v)
-                                   {
+        tree.template traverse<KlpStrategy>([&](const TValue &v)
+                                            {
             std::ostringstream oss; oss << v;
             if (!result.empty()) result += ' ';
             result += oss.str(); });
